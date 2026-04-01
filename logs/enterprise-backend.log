@@ -1,0 +1,21 @@
+2026-04-01 15:21:06.501 [main] INFO  c.e.app.EnterpriseApplication - Starting EnterpriseApplication using Java 21.0.10 with PID 27080 (D:\PROJECT_Full_Tech_SPRING\springboot-enterprise\target\classes started by Admin in D:\PROJECT_Full_Tech_SPRING\springboot-enterprise)
+2026-04-01 15:21:06.502 [main] DEBUG c.e.app.EnterpriseApplication - Running with Spring Boot v3.3.0, Spring v6.1.8
+2026-04-01 15:21:06.502 [main] INFO  c.e.app.EnterpriseApplication - The following 1 profile is active: "dev"
+2026-04-01 15:21:07.217 [main] WARN  o.s.b.w.s.c.AnnotationConfigServletWebServerApplicationContext - Exception encountered during context initialization - cancelling refresh attempt: org.springframework.beans.factory.support.BeanDefinitionOverrideException: Invalid bean definition with name 'orderQueue' defined in class path resource [com/enterprise/app/config/RabbitMQConfig.class]: Cannot register bean definition [Root bean: class [null]; scope=; abstract=false; lazyInit=null; autowireMode=3; dependencyCheck=0; autowireCandidate=true; primary=false; factoryBeanName=rabbitMQConfig; factoryMethodName=orderQueue; initMethodNames=null; destroyMethodNames=[(inferred)]; defined in class path resource [com/enterprise/app/config/RabbitMQConfig.class]] for bean 'orderQueue' since there is already [Root bean: class [null]; scope=; abstract=false; lazyInit=null; autowireMode=3; dependencyCheck=0; autowireCandidate=true; primary=false; factoryBeanName=activeMQConfig; factoryMethodName=orderQueue; initMethodNames=null; destroyMethodNames=[(inferred)]; defined in class path resource [com/enterprise/app/config/ActiveMQConfig.class]] bound.
+2026-04-01 15:21:07.223 [main] INFO  o.s.b.a.l.ConditionEvaluationReportLogger - 
+
+Error starting ApplicationContext. To display the condition evaluation report re-run your application with 'debug' enabled.
+2026-04-01 15:21:07.232 [main] ERROR o.s.b.d.LoggingFailureAnalysisReporter - 
+
+***************************
+APPLICATION FAILED TO START
+***************************
+
+Description:
+
+The bean 'orderQueue', defined in class path resource [com/enterprise/app/config/RabbitMQConfig.class], could not be registered. A bean with that name has already been defined in class path resource [com/enterprise/app/config/ActiveMQConfig.class] and overriding is disabled.
+
+Action:
+
+Consider renaming one of the beans or enabling overriding by setting spring.main.allow-bean-definition-overriding=true
+

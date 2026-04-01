@@ -1,0 +1,305 @@
+version: "3.9"
+
+# ─────────────────────────────────────────────────────────────────────────────
+#  Enterprise Backend — Full Stack Docker Compose
+#  Services: PostgreSQL · MongoDB · Redis · Kafka · RabbitMQ · ActiveMQ
+#            Elasticsearch · Zipkin · Prometheus · Grafana · App
+# ─────────────────────────────────────────────────────────────────────────────
+
+networks:
+    enterprise-net:
+        driver: bridge
+
+volumes:
+    postgres_data:
+    mongodb_data:
+    redis_data:
+    kafka_data:
+    zookeeper_data:
+    rabbitmq_data:
+    elasticsearch_data:
+    prometheus_data:
+    grafana_data:
+
+
+services:
+
+    # ══════════════════════════════════════
+    #  PostgreSQL
+    # ══════════════════════════════════════
+    postgres:
+        image: postgres:16-alpine
+        container_name: enterprise-postgres
+        environment:
+            POSTGRES_DB: enterprise_db
+            POSTGRES_USER: postgres
+            POSTGRES_PASSWORD: postgres
+        ports:
+            - "5432:5432"
+        volumes:
+            - postgres_data:/var/lib/postgresql/data
+        networks: [ enterprise-net ]
+        healthcheck:
+            test: [ "CMD-SHELL", "pg_isready -U postgres" ]
+            interval: 10s
+            timeout: 5s
+            retries: 5
+
+    # ══════════════════════════════════════
+    #  MongoDB
+    # ══════════════════════════════════════
+    mongodb:
+        image: mongo:7.0
+        container_name: enterprise-mongodb
+        environment:
+            MONGO_INITDB_ROOT_USERNAME: admin
+            MONGO_INITDB_ROOT_PASSWORD: admin
+            MONGO_INITDB_DATABASE: enterprise_mongo
+        ports:
+            - "27017:27017"
+        volumes:
+            - mongodb_data:/data/db
+        networks: [ enterprise-net ]
+        healthcheck:
+            test: [ "CMD", "mongosh", "--eval", "db.adminCommand('ping')" ]
+            interval: 15s
+            timeout: 10s
+            retries: 5
+
+    # ══════════════════════════════════════
+    #  Redis (with persistence)
+    # ══════════════════════════════════════
+    redis:
+        image: redis:7.2-alpine
+        container_name: enterprise-redis
+        command: >
+            redis-server --appendonly yes --maxmemory 512mb --maxmemory-policy allkeys-lru
+        ports:
+            - "6379:6379"
+        volumes:
+            - redis_data:/data
+        networks: [ enterprise-net ]
+        healthcheck:
+            test: [ "CMD", "redis-cli", "ping" ]
+            interval: 10s
+            timeout: 5s
+            retries: 5
+
+    # ══════════════════════════════════════
+    #  Zookeeper (required by Kafka)
+    # ══════════════════════════════════════
+    zookeeper:
+        image: confluentinc/cp-zookeeper:7.6.0
+        container_name: enterprise-zookeeper
+        environment:
+            ZOOKEEPER_CLIENT_PORT: 2181
+            ZOOKEEPER_TICK_TIME: 2000
+        ports:
+            - "2181:2181"
+        volumes:
+            - zookeeper_data:/var/lib/zookeeper
+        networks: [ enterprise-net ]
+
+    # ══════════════════════════════════════
+    #  Apache Kafka
+    # ══════════════════════════════════════
+    kafka:
+        image: confluentinc/cp-kafka:7.6.0
+        container_name: enterprise-kafka
+        depends_on:
+            zookeeper:
+                condition: service_started
+        environment:
+            KAFKA_BROKER_ID: 1
+            KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+            KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:9093
+            KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+            KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+            KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+            KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+            KAFKA_DELETE_TOPIC_ENABLE: "true"
+            KAFKA_LOG_RETENTION_HOURS: 168
+        ports:
+            - "9092:9092"
+            - "9093:9093"
+        volumes:
+            - kafka_data:/var/lib/kafka/data
+        networks: [ enterprise-net ]
+        healthcheck:
+            test: [ "CMD", "kafka-broker-api-versions", "--bootstrap-server", "localhost:9092" ]
+            interval: 30s
+            timeout: 10s
+            retries: 5
+
+    # Kafka UI
+    kafka-ui:
+        image: provectuslabs/kafka-ui:latest
+        container_name: enterprise-kafka-ui
+        depends_on: [ kafka ]
+        environment:
+            KAFKA_CLUSTERS_0_NAME: enterprise
+            KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
+        ports:
+            - "8090:8080"
+        networks: [ enterprise-net ]
+
+    # ══════════════════════════════════════
+    #  RabbitMQ
+    # ══════════════════════════════════════
+    rabbitmq:
+        image: rabbitmq:3.13-management-alpine
+        container_name: enterprise-rabbitmq
+        environment:
+            RABBITMQ_DEFAULT_USER: guest
+            RABBITMQ_DEFAULT_PASS: guest
+        ports:
+            - "5672:5672" # AMQP
+            - "15672:15672" # Management UI
+            - "61613:61613" # STOMP (for WebSocket relay)
+        volumes:
+            - rabbitmq_data:/var/lib/rabbitmq
+        networks: [ enterprise-net ]
+        healthcheck:
+            test: [ "CMD", "rabbitmq-diagnostics", "ping" ]
+            interval: 15s
+            timeout: 10s
+            retries: 5
+
+    # ══════════════════════════════════════
+    #  Apache ActiveMQ
+    # ══════════════════════════════════════
+    activemq:
+        image: apache/activemq-classic:5.18.3
+        container_name: enterprise-activemq
+        environment:
+            ACTIVEMQ_ADMIN_LOGIN: admin
+            ACTIVEMQ_ADMIN_PASSWORD: admin
+        ports:
+            - "61616:61616" # OpenWire
+            - "8161:8161" # Admin console
+            - "61614:61614" # STOMP
+            - "5675:5675" # AMQP
+        networks: [ enterprise-net ]
+
+    # ══════════════════════════════════════
+    #  Elasticsearch
+    # ══════════════════════════════════════
+    elasticsearch:
+        image: docker.elastic.co/elasticsearch/elasticsearch:8.13.0
+        container_name: enterprise-elasticsearch
+        environment:
+            - discovery.type=single-node
+            - xpack.security.enabled=false
+            - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+        ports:
+            - "9200:9200"
+        volumes:
+            - elasticsearch_data:/usr/share/elasticsearch/data
+        networks: [ enterprise-net ]
+        healthcheck:
+            test: [ "CMD-SHELL", "curl -s http://localhost:9200/_cluster/health | grep -v red" ]
+            interval: 20s
+            timeout: 10s
+            retries: 5
+
+    # Kibana
+    kibana:
+        image: docker.elastic.co/kibana/kibana:8.13.0
+        container_name: enterprise-kibana
+        depends_on: [ elasticsearch ]
+        environment:
+            ELASTICSEARCH_HOSTS: http://elasticsearch:9200
+        ports:
+            - "5601:5601"
+        networks: [ enterprise-net ]
+
+    # ══════════════════════════════════════
+    #  Zipkin (Distributed Tracing)
+    # ══════════════════════════════════════
+    zipkin:
+        image: openzipkin/zipkin:3
+        container_name: enterprise-zipkin
+        ports:
+            - "9411:9411"
+        networks: [ enterprise-net ]
+
+    # ══════════════════════════════════════
+    #  Prometheus
+    # ══════════════════════════════════════
+    prometheus:
+        image: prom/prometheus:v2.51.0
+        container_name: enterprise-prometheus
+        command:
+            - '--config.file=/etc/prometheus/prometheus.yml'
+            - '--storage.tsdb.retention.time=30d'
+        ports:
+            - "9090:9090"
+        volumes:
+            - ./docker/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+            - prometheus_data:/prometheus
+        networks: [ enterprise-net ]
+
+    # ══════════════════════════════════════
+    #  Grafana
+    # ══════════════════════════════════════
+    grafana:
+        image: grafana/grafana:10.4.0
+        container_name: enterprise-grafana
+        environment:
+            GF_SECURITY_ADMIN_USER: admin
+            GF_SECURITY_ADMIN_PASSWORD: admin
+            GF_USERS_ALLOW_SIGN_UP: "false"
+        ports:
+            - "3000:3000"
+        volumes:
+            - grafana_data:/var/lib/grafana
+            - ./docker/grafana/dashboards:/etc/grafana/provisioning/dashboards
+            - ./docker/grafana/datasources:/etc/grafana/provisioning/datasources
+        depends_on: [ prometheus ]
+        networks: [ enterprise-net ]
+
+    # ══════════════════════════════════════
+    #  Application
+    # ══════════════════════════════════════
+    app:
+        build:
+            context: .
+            dockerfile: Dockerfile
+        container_name: enterprise-app
+        depends_on:
+            postgres: { condition: service_healthy }
+            redis: { condition: service_healthy }
+            kafka: { condition: service_healthy }
+            rabbitmq: { condition: service_healthy }
+            elasticsearch: { condition: service_healthy }
+        environment:
+            SPRING_PROFILES_ACTIVE: prod
+            DB_HOST: postgres
+            DB_PORT: 5432
+            DB_NAME: enterprise_db
+            DB_USER: postgres
+            DB_PASSWORD: postgres
+            MONGO_HOST: mongodb
+            MONGO_PORT: 27017
+            MONGO_DB: enterprise_mongo
+            MONGO_USER: admin
+            MONGO_PASSWORD: admin
+            REDIS_HOST: redis
+            REDIS_PORT: 6379
+            KAFKA_HOST: kafka
+            KAFKA_PORT: 9092
+            RABBITMQ_HOST: rabbitmq
+            RABBITMQ_PORT: 5672
+            ACTIVEMQ_HOST: activemq
+            ACTIVEMQ_PORT: 61616
+            ES_HOST: elasticsearch
+            ES_PORT: 9200
+            ZIPKIN_HOST: zipkin
+            ZIPKIN_PORT: 9411
+            GRPC_PORT: 9090
+            SERVER_PORT: 8080
+        ports:
+            - "8080:8080"
+            - "9090:9090" # gRPC
+        networks: [ enterprise-net ]
+        restart: unless-stopped

@@ -1,0 +1,75 @@
+syntax = "proto3";
+
+package com.enterprise.app.grpc;
+
+option java_package = "com.enterprise.app.grpc";
+option java_multiple_files = true;
+
+service UserService {
+  rpc GetUser (GetUserRequest) returns (UserResponse);
+  rpc CreateUser (CreateUserRequest) returns (UserResponse);
+  rpc ListUsers (ListUsersRequest) returns (ListUsersResponse);
+  rpc WatchUserEvents (GetUserRequest) returns (stream UserResponse);
+}
+
+message GetUserRequest {
+  string id = 1;
+}
+
+message CreateUserRequest {
+  string username = 1;
+  string email = 2;
+  string password = 3;
+  string firstName = 4;
+  string lastName = 5;
+  string phoneNumber = 6;
+}
+
+message ListUsersRequest {
+  PageRequest page = 1;
+}
+
+message UserResponse {
+  string id = 1;
+  string username = 2;
+  string email = 3;
+  string firstName = 4;
+  string lastName = 5;
+  string phoneNumber = 6;
+  string status = 7;
+  string createdAt = 8;
+  repeated string roles = 9;
+}
+
+message ListUsersResponse {
+  repeated UserResponse users = 1;
+  PageResponse page = 2;
+}
+
+message PageRequest {
+  int32 page = 1;
+  int32 size = 2;
+}
+
+message PageResponse {
+  int32 totalPages = 1;
+  int64 totalElements = 2;
+  int32 currentPage = 3;
+  int32 pageSize = 4;
+}
+
+// PRODUCT
+service ProductService {
+  rpc UploadProducts (stream ProductRequest) returns (BatchProductResponse);
+}
+
+message ProductRequest {
+  string id = 1;
+  string name = 2;
+  double price = 3;
+}
+
+message BatchProductResponse {
+  int32 count = 1;
+  string message = 2;
+}

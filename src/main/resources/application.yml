@@ -1,0 +1,338 @@
+spring:
+  application:
+    name: enterprise-backend
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:dev}
+
+  # ==================== DATABASE (PostgreSQL) ====================
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:enterprise_db}
+    username: ${DB_USER:postgres}
+    password: ${DB_PASSWORD:postgres}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      pool-name: HikariPool-Enterprise
+      minimum-idle: 5
+      maximum-pool-size: 20
+      idle-timeout: 300000
+      connection-timeout: 20000
+      max-lifetime: 1200000
+      leak-detection-threshold: 60000
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
+        default_schema: public
+        jdbc.batch_size: 50
+        order_inserts: true
+        order_updates: true
+        generate_statistics: false
+
+  # ==================== FLYWAY ====================
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+
+  # ==================== MONGODB ====================
+  data:
+    mongodb:
+      uri: mongodb://${MONGO_USER:admin}:${MONGO_PASSWORD:admin}@${MONGO_HOST:localhost}:${MONGO_PORT:27017}/${MONGO_DB:enterprise_mongo}?authSource=admin
+      auto-index-creation: true
+
+    # ==================== REDIS ====================
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      database: 0
+      lettuce:
+        pool:
+          max-active: 16
+          max-idle: 8
+          min-idle: 2
+          max-wait: -1ms
+        shutdown-timeout: 200ms
+      timeout: 5000ms
+
+    # ==================== ELASTICSEARCH ====================
+    elasticsearch:
+      uris: http://${ES_HOST:localhost}:${ES_PORT:9200}
+      username: ${ES_USER:elastic}
+      password: ${ES_PASSWORD:elastic}
+
+  # ==================== CACHE ====================
+  cache:
+    type: redis
+    redis:
+      time-to-live: 600000
+      cache-null-values: false
+      key-prefix: 'enterprise::'
+
+  # ==================== KAFKA ====================
+  kafka:
+    bootstrap-servers: ${KAFKA_HOST:localhost}:${KAFKA_PORT:9092}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      acks: all
+      retries: 3
+      properties:
+        enable.idempotence: true
+        max.in.flight.requests.per.connection: 5
+        compression.type: snappy
+        linger.ms: 20
+        batch.size: 32768
+    consumer:
+      group-id: enterprise-group
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      auto-offset-reset: earliest
+      enable-auto-commit: false
+      properties:
+        spring.json.trusted.packages: com.enterprise.app.*
+        isolation.level: read_committed
+    listener:
+      ack-mode: MANUAL_IMMEDIATE
+      concurrency: 3
+
+  # ==================== RABBITMQ ====================
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USER:guest}
+    password: ${RABBITMQ_PASSWORD:guest}
+    virtual-host: /
+    listener:
+      simple:
+        acknowledge-mode: MANUAL
+        concurrency: 3
+        max-concurrency: 10
+        prefetch: 10
+        retry:
+          enabled: true
+          max-attempts: 3
+          initial-interval: 1000
+          multiplier: 2.0
+          max-interval: 10000
+    publisher-confirm-type: CORRELATED
+    publisher-returns: true
+
+  # ==================== ACTIVEMQ ====================
+  activemq:
+    broker-url: tcp://${ACTIVEMQ_HOST:localhost}:${ACTIVEMQ_PORT:61616}
+    user: ${ACTIVEMQ_USER:admin}
+    password: ${ACTIVEMQ_PASSWORD:admin}
+    pool:
+      enabled: true
+      max-connections: 10
+
+  # ==================== WEBSOCKET ====================
+
+  # ==================== MAIL ====================
+  mail:
+    host: ${MAIL_HOST:smtp.gmail.com}
+    port: ${MAIL_PORT:587}
+    username: ${MAIL_USER:}
+    password: ${MAIL_PASSWORD:}
+    properties:
+      mail.smtp.auth: true
+      mail.smtp.starttls.enable: true
+
+  # ==================== SECURITY (OAuth2) ====================
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${JWT_ISSUER_URI:http://localhost:8080/realms/enterprise}
+      client:
+        registration:
+          google:
+            client-id: ${GOOGLE_CLIENT_ID:}
+            client-secret: ${GOOGLE_CLIENT_SECRET:}
+            scope: openid,profile,email
+          github:
+            client-id: ${GITHUB_CLIENT_ID:}
+            client-secret: ${GITHUB_CLIENT_SECRET:}
+
+  # ==================== BATCH ====================
+  batch:
+    jdbc:
+      initialize-schema: always
+    job:
+      enabled: false
+
+# ==================== GRPC ====================
+grpc:
+  server:
+    port: ${GRPC_PORT:9090}
+    enable-reflection: true
+    security:
+      enabled: false
+  client:
+    user-service:
+      address: static://localhost:9091
+      negotiation-type: PLAINTEXT
+    product-service:
+      address: static://localhost:9092
+      negotiation-type: PLAINTEXT
+
+# ==================== SERVER ====================
+server:
+  port: ${SERVER_PORT:8080}
+  servlet:
+    context-path: /
+  compression:
+    enabled: true
+    mime-types: application/json,application/xml,text/html,text/plain
+    min-response-size: 1024
+  http2:
+    enabled: true
+  error:
+    include-message: always
+    include-binding-errors: always
+    include-stacktrace: on_param
+
+# ==================== ACTUATOR / MONITORING ====================
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus,env,beans,loggers,caches,flyway
+  endpoint:
+    health:
+      show-details: always
+      show-components: always
+    prometheus:
+      enabled: true
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+    tags:
+      application: ${spring.application.name}
+  tracing:
+    sampling:
+      probability: 1.0
+  zipkin:
+    tracing:
+      endpoint: http://${ZIPKIN_HOST:localhost}:${ZIPKIN_PORT:9411}/api/v2/spans
+
+# ==================== OPENAPI ====================
+springdoc:
+  api-docs:
+    path: /api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    display-request-duration: true
+    groups-order: DESC
+    operationsSorter: method
+    tagsSorter: alpha
+  show-actuator: true
+
+# ==================== RESILIENCE4J ====================
+resilience4j:
+  circuitbreaker:
+    instances:
+      userService:
+        register-health-indicator: true
+        event-consumer-buffer-size: 10
+        sliding-window-type: COUNT_BASED
+        sliding-window-size: 10
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 5s
+        permitted-number-of-calls-in-half-open-state: 3
+        automatic-transition-from-open-to-half-open-enabled: true
+      productService:
+        register-health-indicator: true
+        sliding-window-size: 5
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 10s
+  retry:
+    instances:
+      userService:
+        max-attempts: 3
+        wait-duration: 1s
+        retry-exceptions:
+          - java.io.IOException
+          - java.net.ConnectException
+  ratelimiter:
+    instances:
+      apiRateLimiter:
+        limit-for-period: 100
+        limit-refresh-period: 1s
+        timeout-duration: 0
+  bulkhead:
+    instances:
+      userService:
+        max-concurrent-calls: 10
+        max-wait-duration: 100ms
+  timelimiter:
+    instances:
+      userService:
+        timeout-duration: 5s
+
+# ==================== JWT CONFIG ====================
+app:
+  jwt:
+    secret: ${JWT_SECRET:404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970}
+    expiration: 86400000  # 24h in ms
+    refresh-expiration: 604800000  # 7d in ms
+    issuer: enterprise-app
+  cors:
+    allowed-origins: ${CORS_ORIGINS:http://localhost:3000,http://localhost:4200}
+    allowed-methods: GET,POST,PUT,DELETE,PATCH,OPTIONS
+    allowed-headers: "*"
+    max-age: 3600
+  kafka:
+    topics:
+      user-events: user-events
+      order-events: order-events
+      notification-events: notification-events
+      audit-events: audit-events
+  rabbitmq:
+    exchanges:
+      direct: enterprise.direct
+      topic: enterprise.topic
+      fanout: enterprise.fanout
+      dead-letter: enterprise.dlx
+    queues:
+      email: enterprise.email.queue
+      sms: enterprise.sms.queue
+      notification: enterprise.notification.queue
+  activemq:
+    queues:
+      order: ORDER.QUEUE
+      payment: PAYMENT.QUEUE
+    topics:
+      broadcast: BROADCAST.TOPIC
+  rate-limit:
+    capacity: 100
+    refill-tokens: 100
+    refill-duration: 60
+
+# ==================== LOGGING ====================
+logging:
+  level:
+    root: INFO
+    com.enterprise.app: DEBUG
+    org.springframework.security: DEBUG
+    org.hibernate.SQL: DEBUG
+    org.springframework.kafka: INFO
+    io.grpc: INFO
+  pattern:
+    console: "%clr(%d{yyyy-MM-dd HH:mm:ss.SSS}){faint} %clr(${LOG_LEVEL_PATTERN:-%5p}) %clr(${PID:- }){magenta} %clr(---){faint} %clr([%15.15t]){faint} %clr(%-40.40logger{39}){cyan} %clr(:){faint} %m%n${LOG_EXCEPTION_CONVERSION_WORD:-%wEx}"
+    file: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
+  file:
+    name: logs/enterprise-backend.log
+
+# ==================== SHEDLOCK ====================
+shedlock:
+  defaults:
+    lock-at-most-for: PT30M
+    lock-at-least-for: PT5M
